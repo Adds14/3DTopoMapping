@@ -1,0 +1,28 @@
+# Environment
+.env
+*.env
+
+# GEE credentials
+backend/credentials/*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output
+*.pdf
