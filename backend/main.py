@@ -10,6 +10,8 @@ Main application that orchestrates the full pipeline:
   6. Generate an A4 Landscape PDF with FPDF2
   7. Return the PDF for download
 """
+#cd backend
+#py -m pip install -r requirements.txt
 #py -m uvicorn main:app --reload --port 8000
 import logging
 from contextlib import asynccontextmanager
@@ -73,54 +75,47 @@ app.add_middleware(
 
 
 # --- Request Model ---
-class BoundingBoxRequest(BaseModel):
-    """Bounding box defined by four coordinates."""
+class CornerRequest(BaseModel):
+    """Four coordinate values representing two opposite corners."""
+    lat1: float
+    lon1: float
+    lat2: float
+    lon2: float
 
-    north: float
-    south: float
-    east: float
-    west: float
-
-    @field_validator("north", "south")
+    @field_validator("lat1", "lat2")
     @classmethod
-    def validate_latitude(cls, v, info):
+    def validate_latitude(cls, v):
         if not -90 <= v <= 90:
             raise ValueError(f"Latitude must be between -90 and 90, got {v}")
         return v
-
-    @field_validator("east", "west")
+        
+    @field_validator("lon1", "lon2")
     @classmethod
-    def validate_longitude(cls, v, info):
+    def validate_longitude(cls, v):
         if not -180 <= v <= 180:
             raise ValueError(f"Longitude must be between -180 and 180, got {v}")
         return v
 
-    def model_post_init(self, __context):
-        if self.north <= self.south:
-            raise ValueError(
-                f"North ({self.north}) must be greater than South ({self.south})"
-            )
 
-
-# --- Main Endpoint ---
-# Using standard `def` so FastAPI offloads to threadpool (GEE calls are blocking)
+# --- API Routes ---
 @app.post("/api/generate")
-def generate_topographic_pdf(request: BoundingBoxRequest):
+async def generate_topographic_pdf(request: CornerRequest):
     """
-    Generate a topographic map PDF for the given bounding box.
+    Generate the full topographic map PDF based on 2 corners (4 raw values).
+    """
+    # Auto-detect North, South, East, West
+    north = max(request.lat1, request.lat2)
+    south = min(request.lat1, request.lat2)
+    east = max(request.lon1, request.lon2)
+    west = min(request.lon1, request.lon2)
 
-    Pipeline:
-      1. Extract SRTM elevation data from GEE
-      2. Fetch satellite, terrain, and streets basemaps
-      3. Generate contour line overlay
-      4. Composite contours onto each basemap
-      5. Generate A4 landscape PDF
-      6. Return as downloadable PDF
-    """
-    logger.info(
-        f"📍 Generating topo map for N={request.north}, S={request.south}, "
-        f"E={request.east}, W={request.west}"
-    )
+    if north <= south or east <= west:
+        raise HTTPException(
+            status_code=400,
+            detail="The provided coordinates do not form a valid area. Make sure they are not all on a single line."
+        )
+
+    logger.info(f"📍 Generating topo map for N={north}, S={south}, E={east}, W={west}")
 
     # Check if GEE is ready
     if not getattr(app.state, "gee_ready", False):
@@ -134,20 +129,20 @@ def generate_topographic_pdf(request: BoundingBoxRequest):
         # Step 1: Get elevation data from GEE
         logger.info("🌍 Step 1/5: Fetching SRTM elevation data from GEE...")
         elevation_data = get_elevation_data(
-            north=request.north,
-            south=request.south,
-            east=request.east,
-            west=request.west,
+            north=north,
+            south=south,
+            east=east,
+            west=west,
         )
         logger.info(f"   ✓ Elevation data shape: {elevation_data.shape}")
 
         # Step 2: Fetch basemap images
         logger.info("🗺️  Step 2/5: Fetching basemap tiles...")
         basemaps = fetch_all_basemaps(
-            north=request.north,
-            south=request.south,
-            east=request.east,
-            west=request.west,
+            north=north,
+            south=south,
+            east=east,
+            west=west,
         )
         logger.info(f"   ✓ Fetched {len(basemaps)} basemaps")
 
@@ -177,10 +172,10 @@ def generate_topographic_pdf(request: BoundingBoxRequest):
             terrain_img=composited_maps["terrain"],
             streets_img=composited_maps["streets"],
             bbox_info={
-                "north": request.north,
-                "south": request.south,
-                "east": request.east,
-                "west": request.west,
+                "north": north,
+                "south": south,
+                "east": east,
+                "west": west,
             },
             color_legend_img=color_legend_img
         )

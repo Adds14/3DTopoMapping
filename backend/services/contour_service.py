@@ -45,7 +45,7 @@ def generate_contour_overlay(
 
     if masked_elevation.count() == 0:
         # No valid data — return a fully transparent image
-        return Image.new("RGBA", (figsize[0] * 100, figsize[1] * 100), (0, 0, 0, 0))
+        return Image.new("RGBA", (int(figsize[0] * 100), int(figsize[1] * 100)), (0, 0, 0, 0))
 
     # Calculate contour levels
     vmin = float(np.nanmin(elevation_array[np.isfinite(elevation_array)]))
@@ -53,7 +53,7 @@ def generate_contour_overlay(
 
     if vmin == vmax:
         # Flat terrain — no contours to draw
-        return Image.new("RGBA", (figsize[0] * 100, figsize[1] * 100), (0, 0, 0, 0))
+        return Image.new("RGBA", (int(figsize[0] * 100), int(figsize[1] * 100)), (0, 0, 0, 0))
 
     levels = np.linspace(vmin, vmax, num_levels)
 

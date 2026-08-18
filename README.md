@@ -1,6 +1,13 @@
 # 3D TopoMapping
 
-Generate professional topographic map PDFs from SRTM elevation data. Enter four coordinates (bounding box), and get a downloadable A4 landscape PDF with three map views — Satellite, Terrain, and Streets — each overlaid with elevation contour lines.
+Generate professional topographic map PDFs from SRTM elevation data. Enter two coordinate points (forming opposite corners of the area you want mapped), and get a downloadable A4 landscape PDF with three map views — Satellite, Terrain, and Streets.
+
+## Features
+
+- **Automated Bounding Box:** Simply enter any two opposite corner points. The backend automatically computes the exact bounding box.
+- **Advanced PDF Reporting:** Each map includes a **Dynamic Scale Bar**, **North Arrow**, **Coordinate Graticules (Grid lines)**, and an **Elevation Color Legend**.
+- **High-Resolution Overlays:** Precise topographic contour lines dynamically drawn based on 30m NASA SRTM elevation data.
+- **Rich Labels:** CartoDB Voyager POI labels overlaid on all map views for street and landmark clarity.
 
 ## Tech Stack
 
@@ -57,10 +64,10 @@ Generate a topographic map PDF.
 **Request Body:**
 ```json
 {
-  "north": 37.83,
-  "south": 37.71,
-  "east": -122.35,
-  "west": -122.52
+  "lat1": 18.5912,
+  "lon1": 73.8173,
+  "lat2": 18.5903,
+  "lon2": 73.8163
 }
 ```
 

@@ -35,49 +35,43 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
 
         // Get values
-        const north = parseFloat(document.getElementById('north').value);
-        const south = parseFloat(document.getElementById('south').value);
-        const east = parseFloat(document.getElementById('east').value);
-        const west = parseFloat(document.getElementById('west').value);
+        const lat1 = parseFloat(document.getElementById('lat1').value);
+        const lon1 = parseFloat(document.getElementById('lon1').value);
+        const lat2 = parseFloat(document.getElementById('lat2').value);
+        const lon2 = parseFloat(document.getElementById('lon2').value);
 
         // Validation
-        if (isNaN(north) || isNaN(south) || isNaN(east) || isNaN(west)) {
-            showError("Please enter all four coordinates.");
+        if (isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)) {
+            showError("Please enter all four coordinate values.");
             return;
         }
 
-        if (north < -90 || north > 90 || south < -90 || south > 90) {
-            showError("Latitude must be between -90 and 90 degrees.");
+        if (lat1 < -90 || lat1 > 90 || lat2 < -90 || lat2 > 90) {
+            showError("Latitudes must be between -90 and 90 degrees.");
             return;
         }
 
-        if (east < -180 || east > 180 || west < -180 || west > 180) {
-            showError("Longitude must be between -180 and 180 degrees.");
+        if (lon1 < -180 || lon1 > 180 || lon2 < -180 || lon2 > 180) {
+            showError("Longitudes must be between -180 and 180 degrees.");
             return;
         }
 
-        if (south >= north) {
-            showError("North latitude must be greater than South latitude.");
+        if (lat1 === lat2 || lon1 === lon2) {
+            showError("The coordinates must form a valid rectangle (cannot be on a single line).");
             return;
         }
 
-        // We allow west > east because it could cross the antimeridian, but for standard maps usually east > west.
-        // Assuming standard behavior for now, but keeping it flexible.
-        if (west >= east) {
-             showError("East longitude must be greater than West longitude.");
-             return;
-        }
-
-        // Show loading
+        // Show loading state
         loadingOverlay.classList.remove('hidden');
+        generateBtn.disabled = true;
 
         try {
-            const response = await fetch('/api/generate', {
+            const response = await fetch('http://localhost:8000/api/generate', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ north, south, east, west })
+                body: JSON.stringify({ lat1, lon1, lat2, lon2 }),
             });
 
             if (!response.ok) {
