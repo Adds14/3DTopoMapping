@@ -149,3 +149,110 @@ def generate_colorbar_legend(
     buf.seek(0)
 
     return Image.open(buf).convert("RGB")
+
+def generate_contour_geojson(
+    elevation_array: np.ndarray,
+    north: float,
+    south: float,
+    east: float,
+    west: float,
+    num_levels: int = 15,
+) -> dict:
+    """
+    Generate GeoJSON vector contours from elevation data.
+    """
+    masked = np.ma.masked_invalid(elevation_array)
+    if masked.count() == 0:
+        return {"type": "FeatureCollection", "features": []}
+
+    vmin = float(np.nanmin(masked))
+    vmax = float(np.nanmax(masked))
+    if vmin == vmax:
+        return {"type": "FeatureCollection", "features": []}
+
+    levels = np.linspace(vmin, vmax, num_levels)
+    
+    # We need to create a meshgrid of lon, lat for the contour generation
+    height, width = elevation_array.shape
+    lons = np.linspace(west, east, width)
+    lats = np.linspace(north, south, height)  # Array goes top-to-bottom (north to south)
+    X, Y = np.meshgrid(lons, lats)
+
+    fig, ax = plt.subplots()
+    contours = ax.contour(X, Y, masked, levels=levels)
+
+    features = []
+    # contours.allsegs is a list of levels, each level is a list of segments (Nx2 arrays)
+    for level, segments in zip(contours.levels, contours.allsegs):
+        for segment in segments:
+            if len(segment) > 1:
+                features.append({
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": segment.tolist()
+                    },
+                    "properties": {
+                        "elevation": float(level)
+                    }
+                })
+    
+    plt.close(fig)
+
+    return {
+        "type": "FeatureCollection",
+        "features": features
+    }
+
+def generate_filled_contour_base64(
+    elevation_array: np.ndarray,
+    north: float,
+    south: float,
+    east: float,
+    west: float,
+    num_levels: int = 15,
+) -> str:
+    """
+    Generate a base64 encoded PNG of the filled contour gradient.
+    """
+    import base64
+    masked = np.ma.masked_invalid(elevation_array)
+    if masked.count() == 0:
+        return ""
+
+    vmin = float(np.nanmin(masked))
+    vmax = float(np.nanmax(masked))
+    if vmin == vmax:
+        return ""
+
+    levels = np.linspace(vmin, vmax, num_levels)
+
+    # Use extent instead of meshgrid for proper coordinate bounding
+    fig, ax = plt.subplots(figsize=(10, 10))
+    fig.patch.set_alpha(0)
+    ax.set_facecolor("none")
+
+    ax.contourf(
+        masked,
+        levels=levels,
+        cmap="terrain",
+        alpha=0.35,
+        extend="both",
+        extent=[west, east, south, north]
+    )
+
+    ax.set_axis_off()
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
+    buf = io.BytesIO()
+    fig.savefig(
+        buf,
+        format="png",
+        dpi=150,
+        bbox_inches="tight",
+        pad_inches=0,
+        transparent=True,
+    )
+    plt.close(fig)
+    
+    return base64.b64encode(buf.getvalue()).decode('utf-8')

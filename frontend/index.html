@@ -4,21 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D TopoMapping 🏔️</title>
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="background-mesh"></div>
     
-    <main class="container">
+    <main class="container" id="main-container">
         <header class="header">
             <h1>3D TopoMapping 🏔️</h1>
-            <p>Generate Professional Topographic Map PDFs</p>
+            <p>Generate Professional Topographic Maps</p>
         </header>
 
-        <div class="glass-card">
+        <!-- View 1: Input Form -->
+        <div id="form-view" class="glass-card">
             <form id="topo-form" novalidate>
                 <div class="input-grid">
                     <div class="input-group">
@@ -43,9 +49,21 @@
                 </div>
                 
                 <button type="submit" class="generate-btn">
-                    <span>Generate Topographic PDF</span>
+                    <span>View Maps</span>
                 </button>
             </form>
+        </div>
+
+        <!-- View 2: Dashboard -->
+        <div id="dashboard-view" class="glass-card hidden dashboard-layout">
+            <div class="dashboard-header">
+                <h2>Interactive Map Viewer</h2>
+                <div class="dashboard-actions">
+                    <button id="back-btn" class="secondary-btn">Edit Coordinates</button>
+                    <button id="download-pdf-btn" class="generate-btn">Download PDF Report</button>
+                </div>
+            </div>
+            <div id="map" class="map-container"></div>
         </div>
 
         <footer class="footer">
@@ -53,11 +71,13 @@
         </footer>
     </main>
 
+    <!-- Overlay for generating contours/PDF -->
     <div id="loading-overlay" class="loading-overlay hidden">
         <div class="spinner"></div>
-        <p>Generating your topographic maps...</p>
+        <p id="loading-text">Loading...</p>
     </div>
 
+    <!-- Error Toast -->
     <div id="error-toast" class="error-toast hidden">
         <div class="toast-content">
             <span class="toast-icon">⚠️</span>
@@ -65,6 +85,8 @@
         </div>
     </div>
 
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="script.js"></script>
 </body>
 </html>

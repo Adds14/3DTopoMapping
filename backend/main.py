@@ -27,7 +27,7 @@ from pydantic import BaseModel, field_validator
 from config import settings
 from services.gee_service import get_elevation_data
 from services.basemap_service import fetch_all_basemaps
-from services.contour_service import generate_contour_overlay
+from services.contour_service import generate_contour_overlay, generate_contour_geojson, generate_filled_contour_base64
 from services.overlay_service import create_composited_maps
 from services.pdf_service import generate_pdf
 
@@ -98,6 +98,41 @@ class CornerRequest(BaseModel):
 
 
 # --- API Routes ---
+@app.post("/api/contours")
+async def generate_contours(request: CornerRequest):
+    """
+    Generate GeoJSON vector contours and filled shading for the bounding box.
+    """
+    north = max(request.lat1, request.lat2)
+    south = min(request.lat1, request.lat2)
+    east = max(request.lon1, request.lon2)
+    west = min(request.lon1, request.lon2)
+
+    if north <= south or east <= west:
+        raise HTTPException(
+            status_code=400,
+            detail="The provided coordinates do not form a valid area."
+        )
+
+    if not getattr(app.state, "gee_ready", False):
+        gee_err = getattr(app.state, "gee_error", "Unknown error")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Google Earth Engine is not initialized. {gee_err}",
+        )
+
+    try:
+        elevation_data = get_elevation_data(north, south, east, west)
+        geojson = generate_contour_geojson(elevation_data, north, south, east, west)
+        image_base64 = generate_filled_contour_base64(elevation_data, north, south, east, west)
+        return {
+            "geojson": geojson,
+            "image": image_base64
+        }
+    except Exception as e:
+        logger.error(f"Error generating contours: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/generate")
 async def generate_topographic_pdf(request: CornerRequest):
     """
