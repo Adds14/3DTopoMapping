@@ -1,49 +1,166 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- DOM Elements ---
     const form = document.getElementById('topo-form');
     const loadingOverlay = document.getElementById('loading-overlay');
-    const loadingText = document.getElementById('loading-text');
+    const progressList = document.getElementById('progress-list');
     const errorToast = document.getElementById('error-toast');
     const toastMessage = document.getElementById('toast-message');
-    const formView = document.getElementById('form-view');
-    const dashboardView = document.getElementById('dashboard-view');
-    const backBtn = document.getElementById('back-btn');
+    const controlPanel = document.getElementById('control-panel');
+    const collapseBtn = document.getElementById('collapse-btn');
+    const expandBtn = document.getElementById('expand-btn');
     const downloadPdfBtn = document.getElementById('download-pdf-btn');
-    const mainContainer = document.getElementById('main-container');
+    const clearBtn = document.getElementById('clear-btn');
+    const emptyState = document.getElementById('empty-state');
+    const infoBar = document.getElementById('info-bar');
+    const infoLayer = document.getElementById('info-layer');
+    const infoContours = document.getElementById('info-contours');
+    const contourSection = document.getElementById('contour-section');
+    const contourToggle = document.getElementById('contour-toggle');
+    const layerCards = document.querySelectorAll('.layer-card');
 
+    // --- State Variables ---
     let map = null;
     let currentCoords = null;
     let contourLayer = null;
+    let fillLayer = null;
+    let boundaryRect = null;
+    let gridLinesLayer = null;
+    let markerA = null;
+    let markerB = null;
+    let customLegend = null;
+    let activeBasemapName = 'streets';
 
-    // Ripple effect for button
-    document.querySelectorAll('.generate-btn').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            const x = e.clientX - e.target.getBoundingClientRect().left;
-            const y = e.clientY - e.target.getBoundingClientRect().top;
+    // --- Basemap Definitions ---
+    const basemaps = {
+        'satellite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri', maxZoom: 19 }),
+        'terrain': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '© OpenTopoMap', maxNativeZoom: 17, maxZoom: 19 }),
+        'streets': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM contributors', maxZoom: 19 })
+    };
+
+    // --- Initialize Map ---
+    const initMap = () => {
+        map = L.map('map', {
+            zoomControl: false // We will add it manually to position it
+        }).fitWorld();
+
+        // Add zoom control top right
+        L.control.zoom({ position: 'topright' }).addTo(map);
+        
+        // Add Scale Control bottom right
+        L.control.scale({position: 'bottomright', metric: true, imperial: false}).addTo(map);
+
+        // Add North Arrow top right
+        const northControl = L.control({position: 'topright'});
+        northControl.onAdd = function() {
+            const div = L.DomUtil.create('div', 'north-arrow-control');
+            div.innerHTML = '<strong>N</strong><br>↑';
+            return div;
+        };
+        northControl.addTo(map);
+
+        // Add default basemap
+        basemaps[activeBasemapName].addTo(map);
+    };
+
+    initMap();
+
+    // --- UI Interactions ---
+    
+    // Panel Collapse/Expand
+    collapseBtn.addEventListener('click', () => {
+        controlPanel.classList.add('collapsed');
+        expandBtn.classList.remove('hidden');
+        setTimeout(() => map.invalidateSize(), 300);
+    });
+    
+    expandBtn.addEventListener('click', () => {
+        controlPanel.classList.remove('collapsed');
+        expandBtn.classList.add('hidden');
+        setTimeout(() => map.invalidateSize(), 300);
+    });
+
+    // Clear Button
+    clearBtn.addEventListener('click', () => {
+        form.reset();
+        currentCoords = null;
+        emptyState.classList.remove('hidden');
+        infoBar.classList.add('hidden');
+        contourSection.style.display = 'none';
+        downloadPdfBtn.disabled = true;
+        
+        // Remove map elements
+        if (boundaryRect) map.removeLayer(boundaryRect);
+        if (gridLinesLayer) map.removeLayer(gridLinesLayer);
+        if (contourLayer) map.removeLayer(contourLayer);
+        if (fillLayer) map.removeLayer(fillLayer);
+        if (markerA) map.removeLayer(markerA);
+        if (markerB) map.removeLayer(markerB);
+        if (customLegend) map.removeControl(customLegend);
+        
+        map.fitWorld();
+    });
+
+    // Layer Switching
+    layerCards.forEach(card => {
+        card.addEventListener('click', () => {
+            // Update active styling
+            layerCards.forEach(c => c.classList.remove('active'));
+            card.classList.add('active');
             
-            const ripple = document.createElement('span');
-            ripple.classList.add('ripple');
-            ripple.style.left = `${x}px`;
-            ripple.style.top = `${y}px`;
+            // Switch Leaflet layer
+            const newLayerName = card.getAttribute('data-layer');
+            map.removeLayer(basemaps[activeBasemapName]);
+            basemaps[newLayerName].addTo(map);
+            activeBasemapName = newLayerName;
+
+            // Ensure our overlays stay on top
+            if (fillLayer) fillLayer.bringToFront();
+            if (contourLayer) contourLayer.bringToFront();
+            if (boundaryRect) boundaryRect.bringToFront();
             
-            this.appendChild(ripple);
-            
-            setTimeout(() => {
-                ripple.remove();
-            }, 600);
+            // Update info bar
+            infoLayer.textContent = `Layer: ${newLayerName.charAt(0).toUpperCase() + newLayerName.slice(1)}`;
         });
     });
 
+    // Contour Toggle
+    contourToggle.addEventListener('change', (e) => {
+        const show = e.target.checked;
+        if (show) {
+            if (fillLayer) map.addLayer(fillLayer);
+            if (contourLayer) map.addLayer(contourLayer);
+            infoContours.textContent = "Contours: ON";
+        } else {
+            if (fillLayer) map.removeLayer(fillLayer);
+            if (contourLayer) map.removeLayer(contourLayer);
+            infoContours.textContent = "Contours: OFF";
+        }
+    });
+
+    // --- Helpers ---
     const showError = (msg) => {
         toastMessage.textContent = msg;
         errorToast.classList.remove('hidden');
-        
-        setTimeout(() => {
-            errorToast.classList.add('hidden');
-        }, 5000);
+        setTimeout(() => errorToast.classList.add('hidden'), 5000);
     };
 
-    const showLoading = (text) => {
-        loadingText.textContent = text;
+    const updateLoadingStep = (stepText, status = 'active') => {
+        if (status === 'done' && progressList.lastElementChild) {
+            progressList.lastElementChild.className = 'done';
+            progressList.lastElementChild.innerHTML = `✓ ${progressList.lastElementChild.dataset.text}`;
+        }
+        
+        if (stepText) {
+            const li = document.createElement('li');
+            li.className = status;
+            li.dataset.text = stepText;
+            li.innerHTML = status === 'active' ? `○ ${stepText}` : `✓ ${stepText}`;
+            progressList.appendChild(li);
+        }
+    };
+
+    const showLoading = () => {
+        progressList.innerHTML = '';
         loadingOverlay.classList.remove('hidden');
     };
 
@@ -51,192 +168,36 @@ document.addEventListener('DOMContentLoaded', () => {
         loadingOverlay.classList.add('hidden');
     };
 
-    let fillLayer = null;
-
-    const initMap = (north, south, east, west, data) => {
-        const bounds = [
-            [south, west],
-            [north, east]
-        ];
-
-        if (!map) {
-            map = L.map('map', {
-                maxBounds: bounds,
-                maxBoundsViscosity: 1.0
-            }).fitBounds(bounds);
-
-            // Basemaps
-            const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: '© Esri',
-                maxZoom: 19
-            });
-
-            const terrain = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenTopoMap',
-                maxNativeZoom: 17,
-                maxZoom: 19
-            });
-
-            const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 19
-            });
-
-            satellite.addTo(map);
-
-            const baseMaps = {
-                "Satellite": satellite,
-                "Terrain": terrain,
-                "Streets": streets
-            };
-
-            L.control.layers(baseMaps).addTo(map);
-
-            // Add Scale Control
-            L.control.scale({position: 'bottomright', metric: true, imperial: false}).addTo(map);
-
-            // Add North Arrow Control
-            const northControl = L.control({position: 'topright'});
-            northControl.onAdd = function(map) {
-                const div = L.DomUtil.create('div', 'north-arrow-control');
-                div.innerHTML = '<strong>N</strong><br>↑';
-                return div;
-            };
-            northControl.addTo(map);
-
-        } else {
-            map.setMaxBounds(bounds);
-            map.fitBounds(bounds);
-        }
-
-        if (contourLayer) {
-            map.removeLayer(contourLayer);
-        }
+    const buildLegend = (minElev, maxElev) => {
+        if (customLegend) map.removeControl(customLegend);
         
-        if (fillLayer) {
-            map.removeLayer(fillLayer);
-        }
-
-        // Remove old grid lines if any
-        if (window.gridLinesLayer) {
-            map.removeLayer(window.gridLinesLayer);
-        }
-
-        // Draw a boundary rectangle and grid lines
-        const gridFeatures = [];
-        
-        // Add boundary rectangle
-        gridFeatures.push(L.rectangle(bounds, {
-            color: "#ffffff", 
-            weight: 2, 
-            fill: false,
-            dashArray: '5, 5'
-        }));
-
-        // Calculate grid intervals (3 vertical, 3 horizontal lines)
-        const latStep = (north - south) / 3;
-        const lonStep = (east - west) / 3;
-
-        for (let i = 1; i < 3; i++) {
-            // Horizontal lines
-            const lat = south + (latStep * i);
-            gridFeatures.push(L.polyline([[lat, west], [lat, east]], {
-                color: "#ffffff", weight: 1.5, dashArray: '5, 5', opacity: 0.8
-            }));
+        customLegend = L.control({position: 'bottomleft'});
+        customLegend.onAdd = function () {
+            const div = L.DomUtil.create('div', 'custom-legend');
             
-            // Vertical lines
-            const lon = west + (lonStep * i);
-            gridFeatures.push(L.polyline([[south, lon], [north, lon]], {
-                color: "#ffffff", weight: 1.5, dashArray: '5, 5', opacity: 0.8
-            }));
-        }
-
-        window.gridLinesLayer = L.featureGroup(gridFeatures).addTo(map);
-
-        // Add shaded fill overlay
-        if (data.image) {
-            const imageUrl = `data:image/png;base64,${data.image}`;
-            fillLayer = L.imageOverlay(imageUrl, bounds).addTo(map);
-        }
-
-        if (data.geojson && data.geojson.features && data.geojson.features.length > 0) {
-            const geojson = data.geojson;
+            let html = `<h4>Map Legend</h4>`;
+            html += `<div class="legend-item"><span class="legend-color" style="background:#3b82f6; border-radius:50%;"></span> Point A</div>`;
+            html += `<div class="legend-item"><span class="legend-color" style="background:#ef4444; border-radius:50%;"></span> Point B</div>`;
+            html += `<div class="legend-item"><span class="legend-color" style="border: 2px dashed #fff; background:transparent;"></span> Selected Area</div>`;
+            html += `<div class="legend-item"><span class="legend-color" style="height:2px; background:#4a2e15; margin-top:5px;"></span> Topo Contour</div>`;
             
-            // Determine min and max elevation for the legend
-            let minElev = Infinity;
-            let maxElev = -Infinity;
-            geojson.features.forEach(f => {
-                if (f.properties && f.properties.elevation !== undefined) {
-                    minElev = Math.min(minElev, f.properties.elevation);
-                    maxElev = Math.max(maxElev, f.properties.elevation);
-                }
-            });
-
-            if (minElev === Infinity) { minElev = 0; maxElev = 100; }
-            if (minElev === maxElev) { maxElev += 1; }
-
-            contourLayer = L.geoJSON(geojson, {
-                style: function (feature) {
-                    return {
-                        color: "#4a2e15", // Solid brown line
-                        weight: 1.5,
-                        opacity: 0.9
-                    };
-                },
-                onEachFeature: function (feature, layer) {
-                    if (feature.properties && feature.properties.elevation) {
-                        layer.bindTooltip(`${Math.round(feature.properties.elevation)} m`, {
-                            permanent: true,
-                            className: "contour-label",
-                            direction: "center"
-                        });
-                    }
-                }
-            }).addTo(map);
-
-            // Add Legend Control
-            if (window.legendControl) {
-                map.removeControl(window.legendControl);
-            }
-
-            window.legendControl = L.control({position: 'bottomleft'});
-            window.legendControl.onAdd = function (map) {
-                const div = L.DomUtil.create('div', 'info legend');
-                div.style.background = 'rgba(255, 255, 255, 0.9)';
-                div.style.padding = '15px';
-                div.style.borderRadius = '4px';
-                div.style.border = '2px solid rgba(0, 0, 0, 0.2)';
-                div.style.color = '#333';
-                div.style.fontFamily = 'Inter, sans-serif';
-                div.style.minWidth = '200px';
-                
-                div.innerHTML = '<h4 style="margin: 0 0 10px 0; font-size: 14px; text-align: center;">Elevation (m)</h4>';
-                
-                // Create a gradient bar
-                div.innerHTML += `
-                    <div style="
-                        width: 100%;
-                        height: 20px;
-                        background: linear-gradient(to right, rgb(100, 200, 50), rgb(255, 255, 50), rgb(150, 100, 50), rgb(255, 255, 255));
-                        border-radius: 2px;
-                        margin-bottom: 8px;
-                        border: 1px solid #aaa;
-                    "></div>
-                `;
-                
-                div.innerHTML += `
-                    <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: bold;">
+            if (minElev !== undefined) {
+                html += `<div style="margin-top: 12px; font-size: 0.75rem; color: var(--text-muted);">Elevation (m)</div>`;
+                html += `
+                    <div style="width: 100%; height: 12px; background: linear-gradient(to right, rgb(100, 200, 50), rgb(255, 255, 50), rgb(150, 100, 50), rgb(255, 255, 255)); border-radius: 2px; margin: 4px 0;"></div>
+                    <div style="display: flex; justify-content: space-between; font-size: 10px;">
                         <span>${Math.round(minElev)}</span>
-                        <span>${Math.round((minElev + maxElev) / 2)}</span>
                         <span>${Math.round(maxElev)}</span>
                     </div>
                 `;
-                return div;
-            };
-            window.legendControl.addTo(map);
-        }
+            }
+            div.innerHTML = html;
+            return div;
+        };
+        customLegend.addTo(map);
     };
 
+    // --- Generate Map ---
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
 
@@ -252,9 +213,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         currentCoords = { lat1, lon1, lat2, lon2 };
 
-        showLoading("Generating interactive map data...");
+        showLoading();
+        updateLoadingStep("Validating coordinates", "active");
 
         try {
+            // Clean up old layers
+            if (boundaryRect) map.removeLayer(boundaryRect);
+            if (gridLinesLayer) map.removeLayer(gridLinesLayer);
+            if (contourLayer) map.removeLayer(contourLayer);
+            if (fillLayer) map.removeLayer(fillLayer);
+            if (markerA) map.removeLayer(markerA);
+            if (markerB) map.removeLayer(markerB);
+
+            // Fetch data
+            updateLoadingStep(null, "done");
+            updateLoadingStep("Processing Earth Engine elevation data", "active");
+            
             const response = await fetch('/api/contours', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -266,42 +240,107 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(data.detail || `Server error: ${response.status}`);
             }
 
+            updateLoadingStep(null, "done");
+            updateLoadingStep("Generating vector contours & shading", "active");
+
             const data = await response.json();
             
+            updateLoadingStep(null, "done");
+            updateLoadingStep("Rendering GIS workspace", "active");
+
             const north = Math.max(lat1, lat2);
             const south = Math.min(lat1, lat2);
             const east = Math.max(lon1, lon2);
             const west = Math.min(lon1, lon2);
+            const bounds = [[south, west], [north, east]];
 
-            formView.classList.add('hidden');
-            dashboardView.classList.remove('hidden');
-            mainContainer.style.maxWidth = '1200px';
+            // Setup bounds
+            map.setMaxBounds(bounds);
+            map.fitBounds(bounds);
 
-            initMap(north, south, east, west, data);
+            // Add markers
+            const aIcon = L.divIcon({className: 'marker-icon marker-a', iconSize: [16,16]});
+            const bIcon = L.divIcon({className: 'marker-icon marker-b', iconSize: [16,16]});
+            markerA = L.marker([lat1, lon1], {icon: aIcon}).addTo(map);
+            markerB = L.marker([lat2, lon2], {icon: bIcon}).addTo(map);
+
+            // Boundary & Grid
+            const gridFeatures = [
+                L.rectangle(bounds, { color: "#ffffff", weight: 2, fill: false, dashArray: '5, 5' })
+            ];
+            const latStep = (north - south) / 3;
+            const lonStep = (east - west) / 3;
+            for (let i = 1; i < 3; i++) {
+                gridFeatures.push(L.polyline([[south + (latStep * i), west], [south + (latStep * i), east]], { color: "#ffffff", weight: 1.5, dashArray: '5, 5', opacity: 0.6 }));
+                gridFeatures.push(L.polyline([[south, west + (lonStep * i)], [north, west + (lonStep * i)]], { color: "#ffffff", weight: 1.5, dashArray: '5, 5', opacity: 0.6 }));
+            }
+            gridLinesLayer = L.featureGroup(gridFeatures).addTo(map);
+
+            // Elevation Data processing
+            let minElev = Infinity, maxElev = -Infinity;
+            if (data.geojson && data.geojson.features) {
+                data.geojson.features.forEach(f => {
+                    if (f.properties && f.properties.elevation !== undefined) {
+                        minElev = Math.min(minElev, f.properties.elevation);
+                        maxElev = Math.max(maxElev, f.properties.elevation);
+                    }
+                });
+            }
+            if (minElev === Infinity) { minElev = 0; maxElev = 100; }
+            if (minElev === maxElev) { maxElev += 1; }
+
+            // Fill Overlay
+            if (data.image) {
+                fillLayer = L.imageOverlay(`data:image/png;base64,${data.image}`, bounds).addTo(map);
+            }
+
+            // Vector Contours
+            if (data.geojson && data.geojson.features) {
+                contourLayer = L.geoJSON(data.geojson, {
+                    style: { color: "#4a2e15", weight: 1.5, opacity: 0.9 },
+                    onEachFeature: function (feature, layer) {
+                        if (feature.properties && feature.properties.elevation) {
+                            layer.bindTooltip(`${Math.round(feature.properties.elevation)} m`, {
+                                permanent: true, className: "contour-label", direction: "center"
+                            });
+                        }
+                    }
+                }).addTo(map);
+            }
+
+            buildLegend(minElev, maxElev);
+
+            // Update UI State
+            emptyState.classList.add('hidden');
+            infoBar.classList.remove('hidden');
+            contourSection.style.display = 'block';
+            contourToggle.checked = true;
+            downloadPdfBtn.disabled = false;
             
-            // Invalidate size to ensure Leaflet renders correctly after making container visible
-            setTimeout(() => {
-                map.invalidateSize();
-            }, 100);
+            updateLoadingStep(null, "done");
+            
+            // Auto-collapse panel on mobile after generation
+            if (window.innerWidth <= 768) {
+                controlPanel.classList.add('collapsed');
+                expandBtn.classList.remove('hidden');
+                setTimeout(() => map.invalidateSize(), 300);
+            }
 
         } catch (error) {
-            console.error('Error fetching contours:', error);
+            console.error('Error:', error);
             showError(error.message || "Failed to load map data.");
+            updateLoadingStep(error.message, "error");
         } finally {
-            hideLoading();
+            setTimeout(() => hideLoading(), 500); // slight delay for visual completion
         }
     });
 
-    backBtn.addEventListener('click', () => {
-        dashboardView.classList.add('hidden');
-        formView.classList.remove('hidden');
-        mainContainer.style.maxWidth = '800px';
-    });
-
+    // --- Export PDF ---
     downloadPdfBtn.addEventListener('click', async () => {
-        if (!currentCoords) return;
+        if (!currentCoords || downloadPdfBtn.disabled) return;
 
-        showLoading("Generating high-resolution PDF report...");
+        showLoading();
+        updateLoadingStep("Preparing A4 Landscape PDF", "active");
         
         try {
             const response = await fetch('/api/generate', {
@@ -315,8 +354,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(data.detail || `Server error: ${response.status}`);
             }
 
+            updateLoadingStep(null, "done");
+            updateLoadingStep("Downloading file", "active");
+
             const blob = await response.blob();
-            
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.style.display = 'none';
@@ -328,11 +369,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             window.URL.revokeObjectURL(url);
             a.remove();
+            
+            updateLoadingStep(null, "done");
         } catch (error) {
             console.error('Error generating PDF:', error);
             showError(error.message || "Failed to generate PDF.");
         } finally {
-            hideLoading();
+            setTimeout(() => hideLoading(), 500);
         }
     });
 });
