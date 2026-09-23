@@ -184,7 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (minElev !== undefined) {
                 html += `<div style="margin-top: 12px; font-size: 0.75rem; color: var(--text-muted);">Elevation (m)</div>`;
                 html += `
-                    <div style="width: 100%; height: 12px; background: linear-gradient(to right, rgb(100, 200, 50), rgb(255, 255, 50), rgb(150, 100, 50), rgb(255, 255, 255)); border-radius: 2px; margin: 4px 0;"></div>
+                    <div style="width: 100%; height: 12px; background: linear-gradient(to right, #333399, #33ccff, #33cc33, #ffcc66, #996633, #ffffff); border-radius: 2px; margin: 4px 0;"></div>
                     <div style="display: flex; justify-content: space-between; font-size: 10px;">
                         <span>${Math.round(minElev)}</span>
                         <span>${Math.round(maxElev)}</span>
