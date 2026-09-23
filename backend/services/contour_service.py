@@ -16,72 +16,78 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 
+def compute_elevation_parameters(elevation_array: np.ndarray, num_levels: int = 15):
+    """
+    Compute canonical min, max, and contour levels for the elevation grid.
+    Returns (masked_elevation, vmin, vmax, levels).
+    """
+    masked = np.ma.masked_invalid(elevation_array)
+    if masked.count() == 0:
+        return masked, 0.0, 100.0, np.linspace(0, 100, num_levels)
+
+    vmin = float(np.nanmin(masked))
+    vmax = float(np.nanmax(masked))
+    
+    if vmin == vmax:
+        vmax += 1.0
+
+    levels = np.linspace(vmin, vmax, num_levels)
+    return masked, vmin, vmax, levels
+
+
+def _get_web_mercator_coords(lats: np.ndarray, lons: np.ndarray):
+    """
+    Convert 1D arrays of latitudes and longitudes to 2D meshgrids 
+    of Web Mercator (EPSG:3857) X and Y coordinates (in radians).
+    """
+    import math
+    X_merc = np.radians(lons)
+    # math.log(math.tan(math.pi / 4 + math.radians(lat) / 2))
+    Y_merc = np.array([math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)) for lat in lats])
+    return np.meshgrid(X_merc, Y_merc)
+
+
 def generate_contour_overlay(
-    elevation_array: np.ndarray,
-    figsize: tuple[int, int] = (12, 12),
-    num_levels: int = 15,
+    masked_elevation: np.ma.MaskedArray,
+    levels: np.ndarray,
+    lats: np.ndarray,
+    lons: np.ndarray,
+    figsize: tuple[float, float] = (12, 12),
     line_color: str = "#4a2e15",  # Dark topo brown
     line_width: float = 2.0,
     label_fontsize: int = 14,
     show_filled: bool = True,
 ) -> Image.Image:
     """
-    Generate a transparent contour line overlay from elevation data.
-
-    Args:
-        elevation_array: 2D numpy array of elevation values
-        figsize: Figure size in inches (controls resolution)
-        num_levels: Number of contour levels to draw
-        line_color: Color of contour lines
-        line_width: Width of contour lines
-        label_fontsize: Font size for contour labels
-        show_filled: If True, also render filled contours with transparency
-
-    Returns:
-        PIL Image (RGBA) with contour lines on transparent background
+    Generate a transparent contour line overlay in Web Mercator projection.
     """
-    # Handle NaN values for contouring
-    masked_elevation = np.ma.masked_invalid(elevation_array)
-
     if masked_elevation.count() == 0:
-        # No valid data — return a fully transparent image
         return Image.new("RGBA", (int(figsize[0] * 100), int(figsize[1] * 100)), (0, 0, 0, 0))
 
-    # Calculate contour levels
-    vmin = float(np.nanmin(elevation_array[np.isfinite(elevation_array)]))
-    vmax = float(np.nanmax(elevation_array[np.isfinite(elevation_array)]))
+    X_merc, Y_merc = _get_web_mercator_coords(lats, lons)
 
-    if vmin == vmax:
-        # Flat terrain — no contours to draw
-        return Image.new("RGBA", (int(figsize[0] * 100), int(figsize[1] * 100)), (0, 0, 0, 0))
-
-    levels = np.linspace(vmin, vmax, num_levels)
-
-    # Create figure with transparent background
     fig, ax = plt.subplots(figsize=figsize)
     fig.patch.set_alpha(0)
     ax.set_facecolor("none")
 
-    # Draw filled contours with low opacity (color ramp under the lines)
+    # Plot contours using Web Mercator coordinates
     if show_filled:
         filled = ax.contourf(
-            masked_elevation,
+            X_merc, Y_merc, masked_elevation,
             levels=levels,
             cmap="terrain",
             alpha=0.25,
             extend="both",
         )
 
-    # Draw contour lines
     contours = ax.contour(
-        masked_elevation,
+        X_merc, Y_merc, masked_elevation,
         levels=levels,
         colors=line_color,
         linewidths=line_width,
         alpha=0.9,
     )
 
-    # Add elevation labels to contour lines
     labels = ax.clabel(
         contours,
         inline=True,
@@ -93,7 +99,19 @@ def generate_contour_overlay(
     for t in labels:
         t.set_path_effects([patheffects.withStroke(linewidth=3, foreground='white')])
 
-    # Remove axes, ticks, and padding
+    # We must explicitly set the bounds to exactly match the Web Mercator bounding box of the area.
+    # Because basemap_service.py fetched and cropped tiles based on the exact same [west, east, north, south]
+    # We will get the mercator coordinates of the corners and set xlim/ylim to them.
+    import math
+    west_merc = math.radians(lons.min())
+    east_merc = math.radians(lons.max())
+    # South and North mercator bounds
+    south_merc = math.log(math.tan(math.pi / 4 + math.radians(lats.min()) / 2))
+    north_merc = math.log(math.tan(math.pi / 4 + math.radians(lats.max()) / 2))
+    
+    ax.set_xlim(west_merc, east_merc)
+    ax.set_ylim(south_merc, north_merc)
+
     ax.set_axis_off()
     plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
@@ -114,21 +132,15 @@ def generate_contour_overlay(
 
 
 def generate_colorbar_legend(
-    elevation_array: np.ndarray,
+    vmin: float,
+    vmax: float,
     figsize: tuple[float, float] = (8, 1),
 ) -> Image.Image:
     """
     Generate a standalone horizontal color legend for the elevation data.
     """
-    masked = np.ma.masked_invalid(elevation_array)
-    
-    if masked.count() == 0:
-        vmin, vmax = 0, 100
-    else:
-        vmin = float(np.nanmin(masked))
-        vmax = float(np.nanmax(masked))
-        if vmin == vmax:
-            vmax += 1
+    if vmin == vmax:
+        vmax += 1
 
     fig, ax = plt.subplots(figsize=figsize)
 
@@ -151,35 +163,21 @@ def generate_colorbar_legend(
     return Image.open(buf).convert("RGB")
 
 def generate_contour_geojson(
-    elevation_array: np.ndarray,
-    north: float,
-    south: float,
-    east: float,
-    west: float,
-    num_levels: int = 15,
+    masked_elevation: np.ma.MaskedArray,
+    levels: np.ndarray,
+    lats: np.ndarray,
+    lons: np.ndarray,
 ) -> dict:
     """
     Generate GeoJSON vector contours from elevation data.
     """
-    masked = np.ma.masked_invalid(elevation_array)
-    if masked.count() == 0:
+    if masked_elevation.count() == 0:
         return {"type": "FeatureCollection", "features": []}
 
-    vmin = float(np.nanmin(masked))
-    vmax = float(np.nanmax(masked))
-    if vmin == vmax:
-        return {"type": "FeatureCollection", "features": []}
-
-    levels = np.linspace(vmin, vmax, num_levels)
-    
-    # We need to create a meshgrid of lon, lat for the contour generation
-    height, width = elevation_array.shape
-    lons = np.linspace(west, east, width)
-    lats = np.linspace(north, south, height)  # Array goes top-to-bottom (north to south)
     X, Y = np.meshgrid(lons, lats)
 
     fig, ax = plt.subplots()
-    contours = ax.contour(X, Y, masked, levels=levels)
+    contours = ax.contour(X, Y, masked_elevation, levels=levels)
 
     features = []
     # contours.allsegs is a list of levels, each level is a list of segments (Nx2 arrays)
@@ -205,40 +203,34 @@ def generate_contour_geojson(
     }
 
 def generate_filled_contour_base64(
-    elevation_array: np.ndarray,
-    north: float,
-    south: float,
-    east: float,
-    west: float,
-    num_levels: int = 15,
+    masked_elevation: np.ma.MaskedArray,
+    levels: np.ndarray,
+    lats: np.ndarray,
+    lons: np.ndarray,
+    vmin: float,
+    vmax: float,
 ) -> str:
     """
     Generate a base64 encoded PNG of the filled contour gradient.
     """
     import base64
-    masked = np.ma.masked_invalid(elevation_array)
-    if masked.count() == 0:
+    if masked_elevation.count() == 0:
         return ""
 
-    vmin = float(np.nanmin(masked))
-    vmax = float(np.nanmax(masked))
-    if vmin == vmax:
-        return ""
+    X, Y = np.meshgrid(lons, lats)
 
-    levels = np.linspace(vmin, vmax, num_levels)
-
-    # Use extent instead of meshgrid for proper coordinate bounding
     fig, ax = plt.subplots(figsize=(10, 10))
     fig.patch.set_alpha(0)
     ax.set_facecolor("none")
 
     ax.contourf(
-        masked,
+        X, Y, masked_elevation,
         levels=levels,
         cmap="terrain",
         alpha=0.35,
         extend="both",
-        extent=[west, east, south, north]
+        vmin=vmin,
+        vmax=vmax,
     )
 
     ax.set_axis_off()

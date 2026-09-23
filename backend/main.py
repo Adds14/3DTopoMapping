@@ -122,9 +122,18 @@ async def generate_contours(request: CornerRequest):
         )
 
     try:
+        import numpy as np
+        from services.contour_service import compute_elevation_parameters
+        
         elevation_data = get_elevation_data(north, south, east, west)
-        geojson = generate_contour_geojson(elevation_data, north, south, east, west)
-        image_base64 = generate_filled_contour_base64(elevation_data, north, south, east, west)
+        height, width = elevation_data.shape
+        lons = np.linspace(west, east, width)
+        lats = np.linspace(north, south, height)
+        
+        masked_elevation, vmin, vmax, levels = compute_elevation_parameters(elevation_data)
+        
+        geojson = generate_contour_geojson(masked_elevation, levels, lats, lons)
+        image_base64 = generate_filled_contour_base64(masked_elevation, levels, lats, lons, vmin, vmax)
         return {
             "geojson": geojson,
             "image": image_base64
@@ -163,6 +172,10 @@ async def generate_topographic_pdf(request: CornerRequest):
     try:
         # Step 1: Get elevation data from GEE
         logger.info("🌍 Step 1/5: Fetching SRTM elevation data from GEE...")
+        
+        import numpy as np
+        from services.contour_service import compute_elevation_parameters
+        
         elevation_data = get_elevation_data(
             north=north,
             south=south,
@@ -170,6 +183,11 @@ async def generate_topographic_pdf(request: CornerRequest):
             west=west,
         )
         logger.info(f"   ✓ Elevation data shape: {elevation_data.shape}")
+        
+        height, width = elevation_data.shape
+        lons = np.linspace(west, east, width)
+        lats = np.linspace(north, south, height)
+        masked_elevation, vmin, vmax, levels = compute_elevation_parameters(elevation_data)
 
         # Step 2: Fetch basemap images
         logger.info("🗺️  Step 2/5: Fetching basemap tiles...")
@@ -187,7 +205,13 @@ async def generate_topographic_pdf(request: CornerRequest):
         target_size = basemaps["satellite"].size
         # Matplotlib figsize is in inches (default DPI is 100, so divide by 100)
         target_figsize = (target_size[0] / 100.0, target_size[1] / 100.0)
-        contour_overlay = generate_contour_overlay(elevation_data, figsize=target_figsize)
+        contour_overlay = generate_contour_overlay(
+            masked_elevation=masked_elevation,
+            levels=levels,
+            lats=lats,
+            lons=lons,
+            figsize=target_figsize
+        )
         logger.info(f"   ✓ Contour overlay size: {contour_overlay.size}")
 
         # Step 4: Composite contours onto basemaps
@@ -200,7 +224,7 @@ async def generate_topographic_pdf(request: CornerRequest):
         
         # Generate color legend
         from services.contour_service import generate_colorbar_legend
-        color_legend_img = generate_colorbar_legend(elevation_data)
+        color_legend_img = generate_colorbar_legend(vmin, vmax)
         
         pdf_buffer = generate_pdf(
             satellite_img=composited_maps["satellite"],
