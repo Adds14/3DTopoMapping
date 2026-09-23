@@ -13,6 +13,10 @@ Main application that orchestrates the full pipeline:
 #cd backend
 #py -m pip install -r requirements.txt
 #py -m uvicorn main:app --reload --port 8000
+import os
+# Must be set before importing matplotlib to avoid read-only filesystem errors on Vercel
+os.environ["MPLCONFIGDIR"] = "/tmp"
+
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
