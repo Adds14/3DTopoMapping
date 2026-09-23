@@ -20,6 +20,11 @@ os.environ["MPLCONFIGDIR"] = "/tmp"
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+import sys
+import os
+
+# Add the current directory (backend) to sys.path so Vercel can resolve imports
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import ee
 from fastapi import FastAPI, HTTPException
