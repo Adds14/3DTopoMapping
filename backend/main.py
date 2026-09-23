@@ -41,11 +41,18 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Initialize Google Earth Engine on startup using service account credentials."""
     try:
-        credentials = ee.ServiceAccountCredentials(
-            settings.GEE_SERVICE_ACCOUNT_EMAIL,
-            settings.gee_key_absolute_path,
-        )
-        ee.Initialize(credentials=credentials)
+        if settings.GEE_JSON_CREDENTIALS:
+            import json
+            from google.oauth2.service_account import Credentials
+            creds_dict = json.loads(settings.GEE_JSON_CREDENTIALS)
+            credentials = Credentials.from_service_account_info(creds_dict)
+            ee.Initialize(credentials=credentials)
+        else:
+            credentials = ee.ServiceAccountCredentials(
+                settings.GEE_SERVICE_ACCOUNT_EMAIL,
+                settings.gee_key_absolute_path,
+            )
+            ee.Initialize(credentials=credentials)
         logger.info("✅ Google Earth Engine initialized successfully.")
         app.state.gee_ready = True
     except Exception as e:

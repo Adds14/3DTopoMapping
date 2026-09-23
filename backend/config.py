@@ -9,9 +9,10 @@ from pathlib import Path
 class Settings(BaseSettings):
     """Application settings loaded from .env file."""
 
-    GEE_SERVICE_ACCOUNT_EMAIL: str
-    GEE_KEY_FILE_PATH: str
-    GEE_PROJECT_ID: str
+    GEE_SERVICE_ACCOUNT_EMAIL: str = ""
+    GEE_KEY_FILE_PATH: str = ""
+    GEE_JSON_CREDENTIALS: str = ""  # For Vercel Serverless deployments
+    GEE_PROJECT_ID: str = ""
 
     class Config:
         env_file = ".env"

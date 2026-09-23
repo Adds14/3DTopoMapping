@@ -236,8 +236,18 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.detail || `Server error: ${response.status}`);
+                const data = await response.json().catch(() => ({}));
+                let errMsg = `Server error: ${response.status}`;
+                if (data && data.detail) {
+                    if (Array.isArray(data.detail)) {
+                        errMsg = data.detail.map(err => err.msg || JSON.stringify(err)).join(' | ');
+                    } else if (typeof data.detail === 'string') {
+                        errMsg = data.detail;
+                    } else {
+                        errMsg = JSON.stringify(data.detail);
+                    }
+                }
+                throw new Error(errMsg);
             }
 
             updateLoadingStep(null, "done");
@@ -351,7 +361,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!response.ok) {
                 const data = await response.json().catch(() => ({}));
-                throw new Error(data.detail || `Server error: ${response.status}`);
+                let errMsg = `Server error: ${response.status}`;
+                if (data && data.detail) {
+                    if (Array.isArray(data.detail)) {
+                        errMsg = data.detail.map(err => err.msg || JSON.stringify(err)).join(' | ');
+                    } else if (typeof data.detail === 'string') {
+                        errMsg = data.detail;
+                    } else {
+                        errMsg = JSON.stringify(data.detail);
+                    }
+                }
+                throw new Error(errMsg);
             }
 
             updateLoadingStep(null, "done");
