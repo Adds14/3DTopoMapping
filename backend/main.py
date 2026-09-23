@@ -57,7 +57,8 @@ def init_gee():
             from google.oauth2.service_account import Credentials
             creds_dict = json.loads(settings.GEE_JSON_CREDENTIALS)
             credentials = Credentials.from_service_account_info(creds_dict)
-            ee.Initialize(credentials=credentials)
+            scoped_credentials = credentials.with_scopes(['https://www.googleapis.com/auth/earthengine'])
+            ee.Initialize(credentials=scoped_credentials)
         else:
             credentials = ee.ServiceAccountCredentials(
                 settings.GEE_SERVICE_ACCOUNT_EMAIL,
