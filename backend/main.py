@@ -36,10 +36,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# --- Lifespan: Initialize GEE once at startup ---
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Initialize Google Earth Engine on startup using service account credentials."""
+# --- Initialize GEE synchronously for Serverless compatibility ---
+GEE_READY = False
+GEE_ERROR = None
+
+def init_gee():
+    global GEE_READY, GEE_ERROR
     try:
         if settings.GEE_JSON_CREDENTIALS:
             import json
@@ -54,22 +56,20 @@ async def lifespan(app: FastAPI):
             )
             ee.Initialize(credentials=credentials)
         logger.info("✅ Google Earth Engine initialized successfully.")
-        app.state.gee_ready = True
+        GEE_READY = True
     except Exception as e:
         logger.error(f"❌ GEE Initialization failed: {e}")
-        logger.warning("⚠️  Server will start but map generation will fail until GEE permissions are fixed.")
-        app.state.gee_ready = False
-        app.state.gee_error = str(e)
-    yield
-    logger.info("Shutting down 3D TopoMapping server.")
+        GEE_READY = False
+        GEE_ERROR = str(e)
 
+# Run initialization immediately when module loads
+init_gee()
 
 # --- FastAPI App ---
 app = FastAPI(
     title="3D TopoMapping",
     description="Generate topographic map PDFs from SRTM elevation data",
     version="1.0.0",
-    lifespan=lifespan,
 )
 
 # CORS — allow the frontend to call the API
@@ -121,11 +121,10 @@ async def generate_contours(request: CornerRequest):
             detail="The provided coordinates do not form a valid area."
         )
 
-    if not getattr(app.state, "gee_ready", False):
-        gee_err = getattr(app.state, "gee_error", "Unknown error")
+    if not GEE_READY:
         raise HTTPException(
             status_code=503,
-            detail=f"Google Earth Engine is not initialized. {gee_err}",
+            detail=f"Google Earth Engine is not initialized. {GEE_ERROR}",
         )
 
     try:
@@ -169,11 +168,10 @@ async def generate_topographic_pdf(request: CornerRequest):
     logger.info(f"📍 Generating topo map for N={north}, S={south}, E={east}, W={west}")
 
     # Check if GEE is ready
-    if not getattr(app.state, "gee_ready", False):
-        gee_err = getattr(app.state, "gee_error", "Unknown error")
+    if not GEE_READY:
         raise HTTPException(
             status_code=503,
-            detail=f"Google Earth Engine is not initialized. Fix the GEE permissions and restart the server. Error: {gee_err}",
+            detail=f"Google Earth Engine is not initialized. Fix the GEE permissions and restart the server. Error: {GEE_ERROR}",
         )
 
     try:
