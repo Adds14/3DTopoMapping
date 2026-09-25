@@ -371,7 +371,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Fill Overlay
             if (data.image) {
-                fillLayer = L.imageOverlay(`data:image/png;base64,${data.image}`, bounds).addTo(map);
+                const initialOpacity = parseInt(opacitySlider.value) / 100;
+                fillLayer = L.imageOverlay(`data:image/png;base64,${data.image}`, bounds, { opacity: initialOpacity }).addTo(map);
             }
 
             // Vector Contours

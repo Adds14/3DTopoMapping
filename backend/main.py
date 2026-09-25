@@ -158,7 +158,7 @@ async def generate_contours(request: CornerRequest):
             masked_elevation, levels, lats, lons, request.show_contours, request.label_density
         )
         image_base64 = generate_filled_contour_base64(
-            masked_elevation, levels, lats, lons, vmin, vmax, request.color_opacity / 100.0
+            masked_elevation, levels, lats, lons, vmin, vmax
         )
         return {
             "geojson": geojson,

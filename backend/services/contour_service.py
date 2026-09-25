@@ -223,7 +223,6 @@ def generate_filled_contour_base64(
     lons: np.ndarray,
     vmin: float,
     vmax: float,
-    color_opacity: float = 0.35,
 ) -> str:
     """
     Generate a base64 encoded PNG of the filled contour gradient.
@@ -242,7 +241,7 @@ def generate_filled_contour_base64(
         X, Y, masked_elevation,
         levels=levels,
         cmap="terrain",
-        alpha=color_opacity,
+        alpha=1.0,
         extend="both",
         vmin=vmin,
         vmax=vmax,
