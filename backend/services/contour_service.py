@@ -58,6 +58,7 @@ def generate_contour_overlay(
     show_contours: bool = True,
     show_labels: bool = True,
     color_opacity: float = 0.35,
+    label_density: str = "medium",
     line_color: str = "#4a2e15",  # Dark topo brown
     line_width: float = 2.0,
 ) -> Image.Image:
@@ -93,8 +94,9 @@ def generate_contour_overlay(
         )
 
         if show_labels:
-            # Only draw labels on major contours (every 3rd level)
-            major_levels = levels[::3]
+            # Only draw labels on major contours based on density
+            step = 1 if label_density == "high" else (3 if label_density == "low" else 2)
+            major_levels = levels[::step]
             labels = ax.clabel(
                 contours,
                 levels=major_levels,
@@ -176,6 +178,7 @@ def generate_contour_geojson(
     lats: np.ndarray,
     lons: np.ndarray,
     show_contours: bool = True,
+    label_density: str = "medium",  # Keeping for signature compatibility if needed
 ) -> dict:
     """
     Generate GeoJSON vector contours from elevation data.
@@ -189,12 +192,9 @@ def generate_contour_geojson(
     contours = ax.contour(X, Y, masked_elevation, levels=levels)
 
     features = []
-    # Identify major levels (every 3rd level)
-    major_levels = set(levels[::3])
     
     # contours.allsegs is a list of levels, each level is a list of segments (Nx2 arrays)
-    for level, segments in zip(contours.levels, contours.allsegs):
-        is_major = level in major_levels
+    for i, (level, segments) in enumerate(zip(contours.levels, contours.allsegs)):
         for segment in segments:
             if len(segment) > 1:
                 features.append({
@@ -205,7 +205,7 @@ def generate_contour_geojson(
                     },
                     "properties": {
                         "elevation": float(level),
-                        "is_major": is_major,
+                        "level_index": i,
                     }
                 })
     

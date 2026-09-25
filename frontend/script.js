@@ -145,15 +145,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!contourLayer) return;
         const show = labelsToggle.checked;
         const size = fontSizeSlider.value;
+        const density = document.querySelector('input[name="density"]:checked').value;
+        const step = density === 'high' ? 1 : (density === 'low' ? 3 : 2);
         
         // Update CSS variable for tooltip font size
         document.documentElement.style.setProperty('--label-font-size', `${size}px`);
 
         contourLayer.eachLayer(layer => {
             const feature = layer.feature;
-            if (feature.properties && feature.properties.elevation && feature.properties.is_major) {
+            if (feature.properties && feature.properties.elevation !== undefined && feature.properties.level_index !== undefined) {
+                const is_major = (feature.properties.level_index % step === 0);
                 layer.unbindTooltip();
-                if (show) {
+                if (show && is_major) {
                     layer.bindTooltip(`${Math.round(feature.properties.elevation)} m`, {
                         permanent: true, className: "contour-label", direction: "center"
                     });
@@ -164,6 +167,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     labelsToggle.addEventListener('change', updateLabels);
     
+    document.querySelectorAll('input[name="density"]').forEach(radio => {
+        radio.addEventListener('change', updateLabels);
+    });
+
     fontSizeSlider.addEventListener('input', (e) => {
         fontSizeVal.textContent = `${e.target.value} px`;
         updateLabels();
@@ -183,6 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fontSizeVal.textContent = '11 px';
         opacitySlider.value = 35;
         opacityVal.textContent = '35%';
+        document.querySelector('input[name="density"][value="medium"]').checked = true;
         
         if (contourLayer) map.addLayer(contourLayer);
         if (fillLayer) fillLayer.setOpacity(0.35);
@@ -287,7 +295,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 label_fontsize: parseInt(fontSizeSlider.value),
                 color_opacity: parseInt(opacitySlider.value),
                 show_labels: labelsToggle.checked,
-                show_contours: contourToggle.checked
+                show_contours: contourToggle.checked,
+                label_density: document.querySelector('input[name="density"]:checked').value
             };
             
             const response = await fetch('/api/contours', {
@@ -419,7 +428,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 label_fontsize: parseInt(fontSizeSlider.value),
                 color_opacity: parseInt(opacitySlider.value),
                 show_labels: labelsToggle.checked,
-                show_contours: contourToggle.checked
+                show_contours: contourToggle.checked,
+                label_density: document.querySelector('input[name="density"]:checked').value
             };
 
             const response = await fetch('/api/generate', {

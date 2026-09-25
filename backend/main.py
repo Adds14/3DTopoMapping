@@ -98,9 +98,9 @@ class CornerRequest(BaseModel):
     lon1: float
     lat2: float
     lon2: float
-    
     # Visualization settings
     label_fontsize: int = 11
+    label_density: str = "medium"  # "low", "medium", "high"
     color_opacity: int = 35  # Percentage 0-100
     show_labels: bool = True
     show_contours: bool = True
@@ -155,7 +155,7 @@ async def generate_contours(request: CornerRequest):
         masked_elevation, vmin, vmax, levels = compute_elevation_parameters(elevation_data)
         
         geojson = generate_contour_geojson(
-            masked_elevation, levels, lats, lons, request.show_contours
+            masked_elevation, levels, lats, lons, request.show_contours, request.label_density
         )
         image_base64 = generate_filled_contour_base64(
             masked_elevation, levels, lats, lons, vmin, vmax, request.color_opacity / 100.0
@@ -241,6 +241,7 @@ async def generate_topographic_pdf(request: CornerRequest):
             show_contours=request.show_contours,
             show_labels=request.show_labels,
             color_opacity=request.color_opacity / 100.0,
+            label_density=request.label_density,
         )
         logger.info(f"   ✓ Contour overlay size: {contour_overlay.size}")
 
