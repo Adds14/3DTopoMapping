@@ -53,10 +53,13 @@ def generate_contour_overlay(
     lats: np.ndarray,
     lons: np.ndarray,
     figsize: tuple[float, float] = (12, 12),
+    label_fontsize: int = 11,
+    show_filled: bool = True,
+    show_contours: bool = True,
+    show_labels: bool = True,
+    color_opacity: float = 0.35,
     line_color: str = "#4a2e15",  # Dark topo brown
     line_width: float = 2.0,
-    label_fontsize: int = 14,
-    show_filled: bool = True,
 ) -> Image.Image:
     """
     Generate a transparent contour line overlay in Web Mercator projection.
@@ -76,28 +79,33 @@ def generate_contour_overlay(
             X_merc, Y_merc, masked_elevation,
             levels=levels,
             cmap="terrain",
-            alpha=0.25,
+            alpha=color_opacity,
             extend="both",
         )
 
-    contours = ax.contour(
-        X_merc, Y_merc, masked_elevation,
-        levels=levels,
-        colors=line_color,
-        linewidths=line_width,
-        alpha=0.9,
-    )
+    if show_contours:
+        contours = ax.contour(
+            X_merc, Y_merc, masked_elevation,
+            levels=levels,
+            colors=line_color,
+            linewidths=line_width,
+            alpha=0.9,
+        )
 
-    labels = ax.clabel(
-        contours,
-        inline=True,
-        fontsize=label_fontsize,
-        fmt="%1.0f m",
-        colors=line_color,
-    )
-    
-    for t in labels:
-        t.set_path_effects([patheffects.withStroke(linewidth=3, foreground='white')])
+        if show_labels:
+            # Only draw labels on major contours (every 3rd level)
+            major_levels = levels[::3]
+            labels = ax.clabel(
+                contours,
+                levels=major_levels,
+                inline=True,
+                fontsize=label_fontsize,
+                fmt="%1.0f m",
+                colors=line_color,
+            )
+            
+            for t in labels:
+                t.set_path_effects([patheffects.withStroke(linewidth=3, foreground='white')])
 
     # We must explicitly set the bounds to exactly match the Web Mercator bounding box of the area.
     # Because basemap_service.py fetched and cropped tiles based on the exact same [west, east, north, south]
@@ -167,11 +175,12 @@ def generate_contour_geojson(
     levels: np.ndarray,
     lats: np.ndarray,
     lons: np.ndarray,
+    show_contours: bool = True,
 ) -> dict:
     """
     Generate GeoJSON vector contours from elevation data.
     """
-    if masked_elevation.count() == 0:
+    if masked_elevation.count() == 0 or not show_contours:
         return {"type": "FeatureCollection", "features": []}
 
     X, Y = np.meshgrid(lons, lats)
@@ -180,8 +189,12 @@ def generate_contour_geojson(
     contours = ax.contour(X, Y, masked_elevation, levels=levels)
 
     features = []
+    # Identify major levels (every 3rd level)
+    major_levels = set(levels[::3])
+    
     # contours.allsegs is a list of levels, each level is a list of segments (Nx2 arrays)
     for level, segments in zip(contours.levels, contours.allsegs):
+        is_major = level in major_levels
         for segment in segments:
             if len(segment) > 1:
                 features.append({
@@ -191,7 +204,8 @@ def generate_contour_geojson(
                         "coordinates": segment.tolist()
                     },
                     "properties": {
-                        "elevation": float(level)
+                        "elevation": float(level),
+                        "is_major": is_major,
                     }
                 })
     
@@ -209,6 +223,7 @@ def generate_filled_contour_base64(
     lons: np.ndarray,
     vmin: float,
     vmax: float,
+    color_opacity: float = 0.35,
 ) -> str:
     """
     Generate a base64 encoded PNG of the filled contour gradient.
@@ -227,7 +242,7 @@ def generate_filled_contour_base64(
         X, Y, masked_elevation,
         levels=levels,
         cmap="terrain",
-        alpha=0.35,
+        alpha=color_opacity,
         extend="both",
         vmin=vmin,
         vmax=vmax,

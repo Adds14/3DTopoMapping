@@ -93,11 +93,17 @@ app.add_middleware(
 
 # --- Request Model ---
 class CornerRequest(BaseModel):
-    """Four coordinate values representing two opposite corners."""
+    """Four coordinate values representing two opposite corners and visualization settings."""
     lat1: float
     lon1: float
     lat2: float
     lon2: float
+    
+    # Visualization settings
+    label_fontsize: int = 11
+    color_opacity: int = 35  # Percentage 0-100
+    show_labels: bool = True
+    show_contours: bool = True
 
     @field_validator("lat1", "lat2")
     @classmethod
@@ -148,8 +154,12 @@ async def generate_contours(request: CornerRequest):
         
         masked_elevation, vmin, vmax, levels = compute_elevation_parameters(elevation_data)
         
-        geojson = generate_contour_geojson(masked_elevation, levels, lats, lons)
-        image_base64 = generate_filled_contour_base64(masked_elevation, levels, lats, lons, vmin, vmax)
+        geojson = generate_contour_geojson(
+            masked_elevation, levels, lats, lons, request.show_contours
+        )
+        image_base64 = generate_filled_contour_base64(
+            masked_elevation, levels, lats, lons, vmin, vmax, request.color_opacity / 100.0
+        )
         return {
             "geojson": geojson,
             "image": image_base64
@@ -225,7 +235,12 @@ async def generate_topographic_pdf(request: CornerRequest):
             levels=levels,
             lats=lats,
             lons=lons,
-            figsize=target_figsize
+            figsize=target_figsize,
+            label_fontsize=request.label_fontsize,
+            show_filled=True,
+            show_contours=request.show_contours,
+            show_labels=request.show_labels,
+            color_opacity=request.color_opacity / 100.0,
         )
         logger.info(f"   ✓ Contour overlay size: {contour_overlay.size}")
 

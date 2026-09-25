@@ -96,13 +96,44 @@
 
                 <!-- Contour Toggle (Only active after generation) -->
                 <section class="control-section" id="contour-section" style="display: none;">
-                    <div class="toggle-row">
+                    <div class="toggle-row" style="margin-bottom: 8px;">
                         <h3>Topographic Contours</h3>
+                    </div>
+                    <div class="toggle-row sub-toggle">
+                        <span>Contours</span>
                         <label class="switch">
                             <input type="checkbox" id="contour-toggle" checked>
                             <span class="slider round"></span>
                         </label>
                     </div>
+                </section>
+
+                <hr class="divider" id="viz-divider" style="display: none;">
+
+                <section class="control-section" id="viz-section" style="display: none;">
+                    <h3>Visualization</h3>
+                    <div class="toggle-row sub-toggle">
+                        <span>Labels</span>
+                        <label class="switch">
+                            <input type="checkbox" id="labels-toggle" checked>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Font Size</span>
+                            <span id="font-size-val">11 px</span>
+                        </div>
+                        <input type="range" id="font-size-slider" min="8" max="16" value="11" class="range-slider">
+                    </div>
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Color Opacity</span>
+                            <span id="opacity-val">35%</span>
+                        </div>
+                        <input type="range" id="opacity-slider" min="20" max="70" value="35" class="range-slider">
+                    </div>
+                    <button type="button" id="reset-viz-btn" class="secondary-btn" style="width: 100%; margin-top: 12px; font-size: 0.85rem;">Reset</button>
                 </section>
 
                 <hr class="divider">

@@ -16,6 +16,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const infoContours = document.getElementById('info-contours');
     const contourSection = document.getElementById('contour-section');
     const contourToggle = document.getElementById('contour-toggle');
+    const vizDivider = document.getElementById('viz-divider');
+    const vizSection = document.getElementById('viz-section');
+    const labelsToggle = document.getElementById('labels-toggle');
+    const fontSizeSlider = document.getElementById('font-size-slider');
+    const fontSizeVal = document.getElementById('font-size-val');
+    const opacitySlider = document.getElementById('opacity-slider');
+    const opacityVal = document.getElementById('opacity-val');
+    const resetVizBtn = document.getElementById('reset-viz-btn');
     const layerCards = document.querySelectorAll('.layer-card');
 
     // --- State Variables ---
@@ -125,16 +133,62 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Contour Toggle
     contourToggle.addEventListener('change', (e) => {
-        const show = e.target.checked;
-        if (show) {
-            if (fillLayer) map.addLayer(fillLayer);
-            if (contourLayer) map.addLayer(contourLayer);
-            infoContours.textContent = "Contours: ON";
-        } else {
-            if (fillLayer) map.removeLayer(fillLayer);
-            if (contourLayer) map.removeLayer(contourLayer);
-            infoContours.textContent = "Contours: OFF";
+        if (contourLayer) {
+            if (e.target.checked) map.addLayer(contourLayer);
+            else map.removeLayer(contourLayer);
         }
+        infoContours.textContent = e.target.checked ? "Contours: ON" : "Contours: OFF";
+    });
+
+    // Visualization Toggles & Sliders
+    const updateLabels = () => {
+        if (!contourLayer) return;
+        const show = labelsToggle.checked;
+        const size = fontSizeSlider.value;
+        
+        // Update CSS variable for tooltip font size
+        document.documentElement.style.setProperty('--label-font-size', `${size}px`);
+
+        contourLayer.eachLayer(layer => {
+            const feature = layer.feature;
+            if (feature.properties && feature.properties.elevation && feature.properties.is_major) {
+                layer.unbindTooltip();
+                if (show) {
+                    layer.bindTooltip(`${Math.round(feature.properties.elevation)} m`, {
+                        permanent: true, className: "contour-label", direction: "center"
+                    });
+                }
+            }
+        });
+    };
+
+    labelsToggle.addEventListener('change', updateLabels);
+    
+    fontSizeSlider.addEventListener('input', (e) => {
+        fontSizeVal.textContent = `${e.target.value} px`;
+        updateLabels();
+    });
+
+    opacitySlider.addEventListener('input', (e) => {
+        opacityVal.textContent = `${e.target.value}%`;
+        if (fillLayer) {
+            fillLayer.setOpacity(parseInt(e.target.value) / 100);
+        }
+    });
+
+    resetVizBtn.addEventListener('click', () => {
+        contourToggle.checked = true;
+        labelsToggle.checked = true;
+        fontSizeSlider.value = 11;
+        fontSizeVal.textContent = '11 px';
+        opacitySlider.value = 35;
+        opacityVal.textContent = '35%';
+        
+        if (contourLayer) map.addLayer(contourLayer);
+        if (fillLayer) fillLayer.setOpacity(0.35);
+        
+        infoContours.textContent = "Contours: ON";
+        updateLabels();
     });
 
     // --- Helpers ---
@@ -228,11 +282,18 @@ document.addEventListener('DOMContentLoaded', () => {
             // Fetch data
             updateLoadingStep(null, "done");
             updateLoadingStep("Processing Earth Engine elevation data", "active");
+            const payload = {
+                ...currentCoords,
+                label_fontsize: parseInt(fontSizeSlider.value),
+                color_opacity: parseInt(opacitySlider.value),
+                show_labels: labelsToggle.checked,
+                show_contours: contourToggle.checked
+            };
             
             const response = await fetch('/api/contours', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(currentCoords),
+                body: JSON.stringify(payload),
             });
 
             if (!response.ok) {
@@ -307,24 +368,24 @@ document.addEventListener('DOMContentLoaded', () => {
             // Vector Contours
             if (data.geojson && data.geojson.features) {
                 contourLayer = L.geoJSON(data.geojson, {
-                    style: { color: "#4a2e15", weight: 1.5, opacity: 0.9 },
-                    onEachFeature: function (feature, layer) {
-                        if (feature.properties && feature.properties.elevation) {
-                            layer.bindTooltip(`${Math.round(feature.properties.elevation)} m`, {
-                                permanent: true, className: "contour-label", direction: "center"
-                            });
-                        }
-                    }
+                    style: { color: "#4a2e15", weight: 1.5, opacity: 0.9 }
                 }).addTo(map);
             }
 
             buildLegend(minElev, maxElev);
+            updateLabels();
 
             // Update UI State
             emptyState.classList.add('hidden');
             infoBar.classList.remove('hidden');
             contourSection.style.display = 'block';
-            contourToggle.checked = true;
+            vizDivider.style.display = 'block';
+            vizSection.style.display = 'block';
+            
+            // Sync toggles with current slider values if needed, but defaults are fine
+            if (contourToggle.checked && contourLayer) map.addLayer(contourLayer);
+            if (!contourToggle.checked && contourLayer) map.removeLayer(contourLayer);
+            
             downloadPdfBtn.disabled = false;
             
             updateLoadingStep(null, "done");
@@ -353,10 +414,18 @@ document.addEventListener('DOMContentLoaded', () => {
         updateLoadingStep("Preparing A4 Landscape PDF", "active");
         
         try {
+            const payload = {
+                ...currentCoords,
+                label_fontsize: parseInt(fontSizeSlider.value),
+                color_opacity: parseInt(opacitySlider.value),
+                show_labels: labelsToggle.checked,
+                show_contours: contourToggle.checked
+            };
+
             const response = await fetch('/api/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(currentCoords),
+                body: JSON.stringify(payload),
             });
 
             if (!response.ok) {
